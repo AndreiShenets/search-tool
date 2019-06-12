@@ -1,0 +1,6 @@
+new\sStyleBundle\("(.+?)"\) > $1 > styles > Sort,Distinct
+new\sScriptBundle\("(.+?)"\) > $1 > scripts > Sort,Distinct
+@Scripts\.Render\("(.+?)"\) > $1 > scripts > Sort,Distinct
+@Styles\.Render\("(.+?)"\) > $1 > styles > Sort,Distinct
+link.+href="(@Styles\.Url\(")?(.+?)" > $2 > styles > Sort,Distinct
+script.+src="(@Url\.Content\(")?(.+?)" > $2 > scripts > Sort,Distinct

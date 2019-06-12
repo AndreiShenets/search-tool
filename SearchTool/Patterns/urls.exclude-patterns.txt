@@ -1,0 +1,7 @@
+<script\s+type=("|')text/javascript("|')>
+<script\s+language=("|')javascript("|')>
+[^<]link
+link[^\s|$]
+[^<]script
+script[^\s|$]
+bundles\.Add\(
