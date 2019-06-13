@@ -290,7 +290,7 @@ namespace SearchTool
                 || chosenConfiguration >= configurations.Length
             )
             {
-                throw new Exception($"Invalid configuration index '{choice}' choosen. Terminating...");
+                throw new Exception($"Invalid configuration index '{choice}' chosen. Terminating...");
             }
 
             return configurations[chosenConfiguration].Key;
@@ -460,19 +460,27 @@ namespace SearchTool
 
                 (string OutputLine, bool ReplaceOrigin) result = default;
 
+                bool replaceOrigin = false;
                 for (int index = 0; index < _processors.Length; index++)
                 {
                     MapProcessor processor = _processors[index];
                     result = processor.Process(line);
+
+                    if (result.ReplaceOrigin)
+                    {
+                        replaceOrigin = true;
+                    }
+
+                    line = result.OutputLine;
                 }
 
-                return (result.OutputLine, result.ReplaceOrigin);
+                return (line, replaceOrigin);
             }
         }
 
         private class MapProcessor
         {
-            private static readonly Regex _groupSubstitution = new Regex(@"([^$][$](\d+)|^[$](\d+))");
+            private static readonly Regex _groupSubstitution = new Regex(@"((?<![$])[$](\d+)|^[$](\d+))");
             private static readonly Regex _groupDeescaping = new Regex(@"[$]{2}(\d+)");
             private static readonly Dictionary<int, Regex> _deescapingRegexCache = new Dictionary<int, Regex>();
             private static readonly Dictionary<int, Regex> _substitutionRegexCache = new Dictionary<int, Regex>();
@@ -578,7 +586,7 @@ namespace SearchTool
             {
                 if (!_substitutionRegexCache.TryGetValue(groupIndex, out Regex result))
                 {
-                    result = new Regex($@"([^$][$]{groupIndex}|^[$]{groupIndex})");
+                    result = new Regex($@"((?<![$])[$]{groupIndex}|^[$]{groupIndex})");
                     _substitutionRegexCache.Add(groupIndex, result);
                 }
 
