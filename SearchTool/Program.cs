@@ -520,10 +520,10 @@ namespace SearchTool
 
             public (string OutputLine, bool ReplaceOrigin) Process(string line)
             {
-                Match match = _pattern.Match(line);
+                MatchCollection matches = _pattern.Matches(line);
                 string outputLine = line;
 
-                if (match.Success)
+                if (matches.Any())
                 {
                     string replacement = _replacement;
 
@@ -541,7 +541,10 @@ namespace SearchTool
 
                             Regex regex = GetSubstitutionRegex(groupIndex);
 
-                            replacement = regex.Replace(replacement, match.Groups[groupIndex].Value);
+                            foreach (Match match in matches)
+                            {
+                                replacement = regex.Replace(replacement, match.Groups[groupIndex].Value);
+                            }
                         }
 
                         MatchCollection deescapingMatches = _groupDeescaping.Matches(replacement);
@@ -568,7 +571,7 @@ namespace SearchTool
                     }
                 }
 
-                return (outputLine, _replaceOrigin && match.Success);
+                return (outputLine, _replaceOrigin && matches.Any());
             }
 
             private static Regex GetDeescapingRegex(int groupIndex)
