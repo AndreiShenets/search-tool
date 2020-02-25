@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Serilog;
 using Serilog.Core;
@@ -58,79 +60,84 @@ namespace SearchTool
                 int foundItemCount = 0;
                 FileCounter fileCounter = new FileCounter();
 
-                foreach (string file in files)
-                {
-                    FileNameWriter fileNameWriter = new FileNameWriter(file, logger, fileCounter);
-
-                    bool somethingReplaced = false;
-
-                    string[] fileLines = File.ReadAllLines(file);
-
-                    for (int lineIndex = 0; lineIndex < fileLines.Length; lineIndex++)
+                Parallel.ForEach(
+                    files,
+                    (file, state) =>
                     {
-                        string fileLine = fileLines[lineIndex];
+                        FileNameWriter fileNameWriter = new FileNameWriter(file, logger, fileCounter);
 
-                        string currentLine = fileLine;
+                        bool somethingReplaced = false;
 
-                        if (string.IsNullOrEmpty(currentLine))
+                        string[] fileLines = File.ReadAllLines(file);
+
+                        for (int lineIndex = 0; lineIndex < fileLines.Length; lineIndex++)
                         {
-                            continue;
-                        }
+                            string fileLine = fileLines[lineIndex];
 
-                        if (itemsToSearch
-                            .All(itemToSearch => !currentLine.Contains(itemToSearch, StringComparison.OrdinalIgnoreCase)))
-                        {
-                            continue;
-                        }
+                            string currentLine = fileLine;
 
-                        for (int index = 0; index < excludePatterns.Length; index++)
-                        {
-                            Regex excludePattern = excludePatterns[index];
-                            currentLine = excludePattern.Replace(currentLine, string.Empty);
-                        }
-
-                        for (int index = 0; index < excludePatterns.Length; index++)
-                        {
-                            Regex excludePattern = excludePatterns[index];
-                            currentLine = excludePattern.Replace(currentLine, string.Empty);
-                        }
-
-                        if (itemsToSearch
-                            .All(itemToSearch => !currentLine.Contains(itemToSearch, StringComparison.OrdinalIgnoreCase)))
-                        {
-                            continue;
-                        }
-
-                        fileNameWriter.Write();
-                        logger.Information($"    {lineIndex} {fileLine}");
-
-                        ++foundItemCount;
-
-                        foreach (ICollection<MapPattern> mapChain in mapChains)
-                        {
-                            string processingLine = fileLine;
-                            foreach (MapPattern mapPattern in mapChain)
+                            if (string.IsNullOrEmpty(currentLine))
                             {
-                                (string outputLine, bool replaceOrigin) = mapPattern.Process(processingLine);
+                                continue;
+                            }
 
-                                processingLine = outputLine;
+                            if (itemsToSearch
+                                .All(itemToSearch => !currentLine.Contains(itemToSearch, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                continue;
+                            }
 
-                                if (replaceOrigin)
+                            for (int index = 0; index < excludePatterns.Length; index++)
+                            {
+                                Regex excludePattern = excludePatterns[index];
+                                currentLine = excludePattern.Replace(currentLine, string.Empty);
+                            }
+
+                            for (int index = 0; index < excludePatterns.Length; index++)
+                            {
+                                Regex excludePattern = excludePatterns[index];
+                                currentLine = excludePattern.Replace(currentLine, string.Empty);
+                            }
+
+                            if (itemsToSearch
+                                .All(itemToSearch => !currentLine.Contains(itemToSearch, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                continue;
+                            }
+
+                            fileNameWriter.Write();
+                            logger.Information($"    {lineIndex} {fileLine}");
+
+                            ++foundItemCount;
+
+                            foreach (ICollection<MapPattern> mapChain in mapChains)
+                            {
+                                string processingLine = fileLine;
+                                foreach (MapPattern mapPattern in mapChain)
                                 {
-                                    logger.Information("Replaced with:");
-                                    logger.Information($"    {lineIndex} {processingLine}");
-                                    fileLines[lineIndex] = processingLine;
-                                    somethingReplaced = true;
+                                    (string outputLine, bool replaceOrigin) = mapPattern.Process(processingLine);
+
+                                    processingLine = outputLine;
+
+                                    if (replaceOrigin)
+                                    {
+                                        logger.Information("Replaced with:");
+                                        logger.Information($"    {lineIndex} {processingLine}");
+                                        fileLines[lineIndex] = processingLine;
+                                        somethingReplaced = true;
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    if (somethingReplaced)
-                    {
-                        File.WriteAllLines(file, fileLines);
+                        if (somethingReplaced)
+                        {
+                            File.WriteAllLines(file, fileLines);
+                        }
+
+                        Console.WriteLine($"'{file}' has been processed");
                     }
-                }
+                );
 
                 logger.Information($"Found: {foundItemCount} items in {fileCounter.Count} files");
 
@@ -339,7 +346,6 @@ namespace SearchTool
 
             return new LoggerConfiguration()
                 .MinimumLevel.Verbose()
-                .WriteTo.Console(outputTemplate: LOGGER_MESSAGE_TEMPLATE)
                 .WriteTo.File(
                     logFileName,
                     outputTemplate: LOGGER_MESSAGE_TEMPLATE,
@@ -378,11 +384,13 @@ namespace SearchTool
 
         private class FileCounter
         {
-            public int Count { get; private set; }
+            private int _count;
+
+            public int Count => _count;
 
             public void Increase()
             {
-                Count += 1;
+                Interlocked.Add(ref _count, 1);
             }
         }
 
@@ -501,11 +509,13 @@ namespace SearchTool
                     throw new ArgumentException($"Invalid pattern '{pattern}'");
                 }
 
-                _pattern = new Regex(Unescape(patternParts[0]), RegexOptions.IgnoreCase);
-
                 HashSet<string> options = patternParts[3]
                     .Split(',', StringSplitOptions.RemoveEmptyEntries)
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                _pattern = options.Contains("CaseSensitive")
+                    ? new Regex(Unescape(patternParts[0]))
+                    : new Regex(Unescape(patternParts[0]), RegexOptions.IgnoreCase);
 
                 _options = options;
                 _replacement = Unescape(patternParts[1]);
