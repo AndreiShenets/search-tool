@@ -490,6 +490,7 @@ namespace SearchTool
             private readonly bool _replaceOrigin;
             private readonly string _replacement;
             private readonly MatchCollection _replacementGroupMatches;
+            private readonly HashSet<string> _options;
 
             public MapProcessor(MapResults results, string pattern)
             {
@@ -506,6 +507,7 @@ namespace SearchTool
                     .Split(',', StringSplitOptions.RemoveEmptyEntries)
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+                _options = options;
                 _replacement = Unescape(patternParts[1]);
                 _replacementGroupMatches = _groupSubstitution.Matches(_replacement);
 
@@ -543,7 +545,16 @@ namespace SearchTool
 
                             foreach (Match match in matches)
                             {
-                                replacement = regex.Replace(replacement, match.Groups[groupIndex].Value);
+                                string groupValue = match.Groups[groupIndex].Value;
+                                if (_options.Contains($"LowerCaseGroup{groupIndex}"))
+                                {
+                                    groupValue = groupValue.ToLowerInvariant();
+                                }
+                                if (_options.Contains($"UpperCaseGroup{groupIndex}"))
+                                {
+                                    groupValue = groupValue.ToUpperInvariant();
+                                }
+                                replacement = regex.Replace(replacement, groupValue);
                             }
                         }
 
@@ -561,6 +572,20 @@ namespace SearchTool
                                 replacement = regex.Replace(replacement, $"${groupIndex}");
                             }
                         }
+                    }
+
+                    if (!string.IsNullOrEmpty(replacement)
+                        && _options.Contains("LowerCase")
+                    )
+                    {
+                        replacement = replacement.ToLowerInvariant();
+                    }
+
+                    if (!string.IsNullOrEmpty(replacement)
+                        && _options.Contains("UpperCase")
+                    )
+                    {
+                        replacement = replacement.ToUpperInvariant();
                     }
 
                     outputLine = replacement;
